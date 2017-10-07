@@ -1,0 +1,243 @@
+{
+	"variables": [],
+	"info": {
+		"name": "CordaTradeFinance",
+		"_postman_id": "ebc25fd7-7452-5439-e94a-e7447d6ba490",
+		"description": "",
+		"schema": "https://schema.getpostman.com/json/collection/v2.0.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Get current peer details",
+			"request": {
+				"url": "http://localhost:10007/api/trade/me",
+				"method": "GET",
+				"header": [],
+				"body": {},
+				"description": ""
+			},
+			"response": []
+		},
+		{
+			"name": "Get connected peer details",
+			"request": {
+				"url": "http://localhost:10007/api/trade/peers",
+				"method": "GET",
+				"header": [],
+				"body": {},
+				"description": ""
+			},
+			"response": []
+		},
+		{
+			"name": "List all PO States",
+			"request": {
+				"url": "http://localhost:10007/api/trade/pos",
+				"method": "GET",
+				"header": [],
+				"body": {},
+				"description": ""
+			},
+			"response": []
+		},
+		{
+			"name": "Create PO - Changes status to \"Created\"",
+			"request": {
+				"url": "http://localhost:10007/api/trade/create-po",
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/x-www-form-urlencoded",
+						"description": ""
+					}
+				],
+				"body": {
+					"mode": "urlencoded",
+					"urlencoded": [
+						{
+							"key": "data",
+							"value": "{\"vendor\": {\"name\" : \"vendor name\"}, \"products\" : [{\"name\": \"name1\", \"quantity\": 1,\"price\": 50}, {\"name\": \"name1\", \"quantity\": 1,\"price\": 50}], \"shipping\" : {\"to\" : \"address\"}, \"TnC\" : \"TnC\"}",
+							"description": "",
+							"type": "text"
+						},
+						{
+							"key": "",
+							"value": "",
+							"description": "",
+							"type": "text",
+							"disabled": true
+						}
+					]
+				},
+				"description": ""
+			},
+			"response": []
+		},
+		{
+			"name": "Approve PO - Changes status to \"Approved\"",
+			"request": {
+				"url": "http://localhost:10007/api/trade/approve-po",
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/x-www-form-urlencoded",
+						"description": ""
+					}
+				],
+				"body": {
+					"mode": "urlencoded",
+					"urlencoded": [
+						{
+							"key": "data",
+							"value": "{\"vendor\": {\"name\" : \"vendor name\"}, \"products\" : [{\"name\": \"name1\", \"quantity\": 1,\"price\": 50}, {\"name\": \"name1\", \"quantity\": 1,\"price\": 50}], \"shipping\" : {\"to\" : \"address\"}, \"TnC\" : \"TnC\"}",
+							"description": "",
+							"type": "text"
+						},
+						{
+							"key": "id",
+							"value": "bfa9b55c-b383-4d98-8192-9cf128b3913f",
+							"description": "",
+							"type": "text"
+						}
+					]
+				},
+				"description": ""
+			},
+			"response": []
+		},
+		{
+			"name": "Request Finance - Changes status to \"FinanceRequested\"",
+			"request": {
+				"url": "http://localhost:10007/api/trade/request-finance",
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/x-www-form-urlencoded",
+						"description": ""
+					}
+				],
+				"body": {
+					"mode": "urlencoded",
+					"urlencoded": [
+						{
+							"key": "data",
+							"value": "{\"vendor\": {\"name\" : \"vendor name\"}, \"products\" : [{\"name\": \"name1\", \"quantity\": 1,\"price\": 50}, {\"name\": \"name1\", \"quantity\": 1,\"price\": 50}], \"shipping\" : {\"to\" : \"address\"}, \"TnC\" : \"TnC\"}",
+							"description": "",
+							"type": "text"
+						},
+						{
+							"key": "id",
+							"value": "bfa9b55c-b383-4d98-8192-9cf128b3913f",
+							"description": "",
+							"type": "text"
+						}
+					]
+				},
+				"description": ""
+			},
+			"response": []
+		},
+		{
+			"name": "Rejected PO - Changes status to \"Rejected\"",
+			"request": {
+				"url": "http://localhost:10007/api/trade/reject-po",
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/x-www-form-urlencoded",
+						"description": ""
+					}
+				],
+				"body": {
+					"mode": "urlencoded",
+					"urlencoded": [
+						{
+							"key": "data",
+							"value": "{\"vendor\": {\"name\" : \"vendor name\"}, \"products\" : [{\"name\": \"name1\", \"quantity\": 1,\"price\": 50}, {\"name\": \"name1\", \"quantity\": 1,\"price\": 50}], \"shipping\" : {\"to\" : \"address\"}, \"TnC\" : \"TnC\"}",
+							"description": "",
+							"type": "text"
+						},
+						{
+							"key": "id",
+							"value": "bfa9b55c-b383-4d98-8192-9cf128b3913f",
+							"description": "",
+							"type": "text"
+						}
+					]
+				},
+				"description": ""
+			},
+			"response": []
+		},
+		{
+			"name": "Approve Finance - Changes status to \"FinanceApproved\"",
+			"request": {
+				"url": "http://localhost:10007/api/trade/approve-finance",
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/x-www-form-urlencoded",
+						"description": ""
+					}
+				],
+				"body": {
+					"mode": "urlencoded",
+					"urlencoded": [
+						{
+							"key": "data",
+							"value": "{\"vendor\": {\"name\" : \"vendor name\"}, \"products\" : [{\"name\": \"name1\", \"quantity\": 1,\"price\": 50}, {\"name\": \"name1\", \"quantity\": 1,\"price\": 50}], \"shipping\" : {\"to\" : \"address\"}, \"TnC\" : \"TnC\"}",
+							"description": "",
+							"type": "text"
+						},
+						{
+							"key": "id",
+							"value": "bfa9b55c-b383-4d98-8192-9cf128b3913f",
+							"description": "",
+							"type": "text"
+						}
+					]
+				},
+				"description": ""
+			},
+			"response": []
+		},
+		{
+			"name": "Reject Finance - Changes status to \"FinanceRejected\"",
+			"request": {
+				"url": "http://localhost:10007/api/trade/reject-finance",
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/x-www-form-urlencoded",
+						"description": ""
+					}
+				],
+				"body": {
+					"mode": "urlencoded",
+					"urlencoded": [
+						{
+							"key": "data",
+							"value": "{\"vendor\": {\"name\" : \"vendor name\"}, \"products\" : [{\"name\": \"name1\", \"quantity\": 1,\"price\": 50}, {\"name\": \"name1\", \"quantity\": 1,\"price\": 50}], \"shipping\" : {\"to\" : \"address\"}, \"TnC\" : \"TnC\"}",
+							"description": "",
+							"type": "text"
+						},
+						{
+							"key": "id",
+							"value": "bfa9b55c-b383-4d98-8192-9cf128b3913f",
+							"description": "",
+							"type": "text"
+						}
+					]
+				},
+				"description": ""
+			},
+			"response": []
+		}
+	]
+}
