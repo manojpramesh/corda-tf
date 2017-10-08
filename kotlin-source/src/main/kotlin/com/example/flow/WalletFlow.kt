@@ -5,7 +5,7 @@ import com.example.contract.IOUContract
 import com.example.contract.IOUContract.Companion.IOU_CONTRACT_ID
 import com.example.flow.ExampleFlow.Acceptor
 import com.example.flow.ExampleFlow.Initiator
-import com.example.state.IOUState
+import com.example.state.WalletState
 import net.corda.core.contracts.Command
 import net.corda.core.contracts.StateAndContract
 import net.corda.core.contracts.requireThat
@@ -18,8 +18,8 @@ import net.corda.core.utilities.ProgressTracker.Step
 
 
 /**
- * This flow allows two parties (the [Initiator] and the [Acceptor]) to come to an agreement about the IOU encapsulated
- * within an [IOUState].
+ * This flow allows two parties (the [InitiatorWallet] and the [Acceptor]) to come to an agreement about the IOU encapsulated
+ * within an [WalletState].
  *
  * In our simple example, the [Acceptor] always accepts a valid IOU.
  *
@@ -28,12 +28,12 @@ import net.corda.core.utilities.ProgressTracker.Step
  *
  * All methods called within the [FlowLogic] sub-class need to be annotated with the @Suspendable annotation.
  */
-object ExampleFlow {
+object WalletFlow {
     @InitiatingFlow
     @StartableByRPC
-    class Initiator(val data: String,
-                    val status: String,
-                    val id: String) : FlowLogic<SignedTransaction>() {
+    class InitiatorWallet(val user: Int,
+                          val seller: Int,
+                          val bank: Int) : FlowLogic<SignedTransaction>() {
         /**
          * The progress tracker checkpoints each stage of the flow and outputs the specified messages when each
          * checkpoint is reached in the code. See the 'progressTracker.currentStep' expressions within the call() function.
@@ -68,16 +68,14 @@ object ExampleFlow {
         override fun call(): SignedTransaction {
             // Obtain a reference to the notary we want to use.
             val notary = serviceHub.networkMapCache.notaryIdentities[0]
-
-            val value: Int = 1
             val otherParty = serviceHub.myInfo.legalIdentities.first()
+
             // Stage 1.
             progressTracker.currentStep = GENERATING_TRANSACTION
             // Generate an unsigned transaction.
-            // val iouState = IOUState(iouValue, serviceHub.myInfo.legalIdentities.first(), otherParty, status)
-            val iouState = IOUState(data, status, id, serviceHub.myInfo.legalIdentities.first(), otherParty)
-            val txCommand = Command(IOUContract.Commands.Create(), iouState.participants.map { it.owningKey })
-            val txBuilder = TransactionBuilder(notary).withItems(StateAndContract(iouState, IOU_CONTRACT_ID), txCommand)
+            val walletState = WalletState(user, seller, bank, serviceHub.myInfo.legalIdentities.first())
+            val txCommand = Command(IOUContract.Commands.Create(), walletState.participants.map { it.owningKey })
+            val txBuilder = TransactionBuilder(notary).withItems(StateAndContract(walletState, IOU_CONTRACT_ID), txCommand)
 
             // Stage 2.
             progressTracker.currentStep = VERIFYING_TRANSACTION
@@ -102,15 +100,15 @@ object ExampleFlow {
         }
     }
 
-    @InitiatedBy(Initiator::class)
+    @InitiatedBy(InitiatorWallet::class)
     class Acceptor(val otherPartyFlow: FlowSession) : FlowLogic<SignedTransaction>() {
         @Suspendable
         override fun call(): SignedTransaction {
             val signTransactionFlow = object : SignTransactionFlow(otherPartyFlow) {
                 override fun checkTransaction(stx: SignedTransaction) = requireThat {
                     val output = stx.tx.outputs.single().data
-                    "This must be an IOU transaction." using (output is IOUState)
-                    val iou = output as IOUState
+                    "This must be an Wallet transaction." using (output is WalletState)
+                    val iou = output as WalletState
                     //"The IOU's value can't be too high." using (iou.id < 100)
                 }
             }

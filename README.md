@@ -25,4 +25,5 @@ For every node except the controller, the script also creates a webserver termin
 
 ### API
 
-API documentation is available in ```CordaTradeFinance.postman_collection.json``` file
+API documentation is available in ```CordaTradeFinance.postman_collection.json``` file and in ```https://documenter.getpostman.com/view/2891525/cordatradefinance/716dFfq```
+
