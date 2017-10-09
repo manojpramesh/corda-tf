@@ -20,9 +20,9 @@ import java.util.*
  * @param seller balance of the seller.
  * @param bank balance of the seller.
  */
-data class WalletState(val user: Int,
-                       val seller: Int,
-                       val bank: Int,
+data class WalletState(val entityMetadata: String,
+                       val entityId: Int,
+                       val value: Int,
                        val lender:Party,
                        override val linearId: UniqueIdentifier = UniqueIdentifier()):
         LinearState, QueryableState {
@@ -32,9 +32,9 @@ data class WalletState(val user: Int,
     override fun generateMappedObject(schema: MappedSchema): PersistentState {
         return when (schema) {
             is WalletSchemaV1 -> WalletSchemaV1.PersistentWallet(
-                    this.user,
-                    this.seller,
-                    this.bank
+                    this.entityMetadata,
+                    this.entityId,
+                    this.value
             )
             else -> throw IllegalArgumentException("Unrecognised schema $schema")
         }
