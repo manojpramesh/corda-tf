@@ -31,15 +31,15 @@ import net.corda.core.utilities.ProgressTracker.Step
 object WalletFlow {
     @InitiatingFlow
     @StartableByRPC
-    class InitiatorWallet(val user: Int,
-                          val seller: Int,
-                          val bank: Int) : FlowLogic<SignedTransaction>() {
+    class InitiatorWallet(val entityMetadata: String,
+                          val entityId: Int,
+                          val value: Int) : FlowLogic<SignedTransaction>() {
         /**
          * The progress tracker checkpoints each stage of the flow and outputs the specified messages when each
          * checkpoint is reached in the code. See the 'progressTracker.currentStep' expressions within the call() function.
          */
         companion object {
-            object GENERATING_TRANSACTION : Step("Generating transaction based on new PO.")
+            object GENERATING_TRANSACTION : Step("Generating transaction based on new Wallet.")
             object VERIFYING_TRANSACTION : Step("Verifying contract constraints.")
             object SIGNING_TRANSACTION : Step("Signing transaction with our private key.")
             object GATHERING_SIGS : Step("Gathering the counterparty's signature.") {
@@ -73,7 +73,7 @@ object WalletFlow {
             // Stage 1.
             progressTracker.currentStep = GENERATING_TRANSACTION
             // Generate an unsigned transaction.
-            val walletState = WalletState(user, seller, bank, serviceHub.myInfo.legalIdentities.first())
+            val walletState = WalletState(entityMetadata, entityId, value, serviceHub.myInfo.legalIdentities.first())
             val txCommand = Command(IOUContract.Commands.Create(), walletState.participants.map { it.owningKey })
             val txBuilder = TransactionBuilder(notary).withItems(StateAndContract(walletState, IOU_CONTRACT_ID), txCommand)
 

@@ -23,14 +23,14 @@ object WalletSchemaV1 : MappedSchema(
     @Table(name = "po_states")
     class PersistentWallet(
 
-            @Column(name = "user")
-            var user: Int,
+            @Column(name = "entityMetadata")
+            var entityMetadata: String,
 
-            @Column(name = "seller")
-            var seller: Int,
+            @Column(name = "entityId")
+            var entityId: Int,
 
-            @Column(name = "bank")
-            var bank: Int
+            @Column(name = "value")
+            var value: Int
 
     ) : PersistentState()
 }

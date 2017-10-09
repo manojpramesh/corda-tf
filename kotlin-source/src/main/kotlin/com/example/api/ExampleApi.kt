@@ -254,27 +254,55 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
 
 
 
+    
     /**
      * Get Current balance
      */
     @GET
-    @Path("getBalance")
+    @Path("getWallet")
     @Produces(MediaType.APPLICATION_JSON)
-    fun getBalance(): StateAndRef<WalletState> {
+    fun getWallet(@QueryParam("id") id: Int): Any? {
         val vaultStates = rpcOps.vaultQueryBy<WalletState>()
-        return vaultStates.states.last()
+        val wallet = vaultStates.states
+
+        var result: StateAndRef<WalletState>? = null
+
+        for (n in wallet.count() downTo 1) {
+            if(wallet[n - 1].state.data.entityId == id)
+                result = wallet[n - 1]
+            if(result != null) break
+        }
+
+        if(result != null) return json {
+            "entityId" To result?.state?.data?.entityId
+            "entityMetadata" To result?.state?.data?.entityMetadata
+            "value" To result?.state?.data?.value
+        }
+
+        return null
     }
 
 
     /**
      * Get wallet logs
-     */
+    */
     @GET
-    @Path("wallet-logs")
+    @Path("getWalletTransactionLogs")
     @Produces(MediaType.APPLICATION_JSON)
-    fun getBalanceLogs(): List<StateAndRef<WalletState>> {
+    fun getWalletTransactionLogs(): List<JSONObject> {
         val vaultStates = rpcOps.vaultQueryBy<WalletState>()
-        return vaultStates.states
+        val states: List<StateAndRef<WalletState>> = vaultStates.states
+        var result: MutableList<JSONObject> = mutableListOf()
+
+        states.mapTo(result) {
+            json {
+                "entityMetadata" To it.state.data.entityMetadata
+                "entityId" To it.state.data.entityId
+                "value" To it.state.data.value
+            }
+        }
+
+        return result
     }
 
 
@@ -282,46 +310,47 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
      * Transfer amount from one account to another
      */
     @PUT
-    @Path("transfer-amount")
-    fun Transfer(@FormParam("from") from: String,
-                 @FormParam("to") to: String,
-                 @FormParam("amount") amount: Int): Response {
-
-        if(amount <= 0)
-            return Response.status(Response.Status.BAD_REQUEST).entity("Amount should be greater than 0\n").build()
+    @Path("transfer")
+    fun Transfer(@FormParam("from") from: Int,
+                 @FormParam("to") to: Int,
+                 @FormParam("value") value : Int): Response {
 
         val vaultStates = rpcOps.vaultQueryBy<WalletState>()
-        val balance = vaultStates.states.last().state.data
-        var user = balance.user
-        var seller = balance.seller
-        var bank = balance.bank
+        val wallet = vaultStates.states
+        var fromWallet: StateAndRef<WalletState>? = null
+        var toWallet: StateAndRef<WalletState>? = null
 
-        if(from != "user" && from != "seller" && from != "bank")
-            return Response.status(Response.Status.BAD_REQUEST).entity("from user not valid\n").build()
-
-        if(to != "user" && to != "seller" && to != "bank")
-            return Response.status(Response.Status.BAD_REQUEST).entity("to user not valid\n").build()
-
-        when (from) {
-            "user" -> user -= amount
-            "seller" -> seller -= amount
-            "bank" -> bank -= amount
+        for (n in wallet.count() downTo 1) {
+            if(wallet[n - 1].state.data.entityId == from)
+                fromWallet = wallet[n - 1]
+            if(wallet[n - 1].state.data.entityId == to)
+                toWallet = wallet[n - 1]
+            if(fromWallet != null && toWallet != null)
+                break
         }
 
-        when (to) {
-            "user" -> user += amount
-            "seller" -> seller += amount
-            "bank" -> bank += amount
-        }
+        if(fromWallet == null && toWallet == null)
+            return Response.status(Response.Status.BAD_REQUEST).entity("User id not valid\n").build()
+
 
         var status: Response.Status
         var msg: String
         try {
-            val flowHandle = rpcOps.startTrackedFlow(::InitiatorWallet,user, seller, bank)
-            flowHandle.progress.subscribe { println(">> $it") }
-            val result = flowHandle.returnValue.getOrThrow()
+
+            val fromWalletMeta = fromWallet?.state?.data?.entityMetadata ?: ""
+            val fromWalletAmount = (fromWallet?.state?.data?.value ?: 0) - value
+            val flowHandleFrom = rpcOps.startTrackedFlow(::InitiatorWallet, fromWalletMeta, from, fromWalletAmount)
+            flowHandleFrom.progress.subscribe { println(">> $it") }
+            flowHandleFrom.returnValue.getOrThrow()
+
+            val toWalletMeta = toWallet?.state?.data?.entityMetadata ?: ""
+            val toWalletAmount = (toWallet?.state?.data?.value ?: 0) + value
+            val flowHandleTo = rpcOps.startTrackedFlow(::InitiatorWallet, toWalletMeta, to, toWalletAmount)
+            flowHandleTo.progress.subscribe { println(">> $it") }
+            val resultTo = flowHandleTo.returnValue.getOrThrow()
+
             status = Response.Status.CREATED
-            msg = "{'txHash': ${result.id} }"
+            msg = "{'txHash': ${resultTo.id} }"
         } catch (ex: Throwable) {
             status = Response.Status.BAD_REQUEST
             msg = ex.message!!
@@ -334,30 +363,18 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
      * Load Balance to the given account
      */
     @PUT
-    @Path("load-balance")
-    fun LoadBalance(@FormParam("to") to: String,
-                 @FormParam("amount") amount: Int): Response {
+    @Path("onboardWallet")
+    fun onboardWallet(@FormParam("entityMetadata") entityMetadata: String,
+                      @FormParam("entityId") entityId: Int,
+                      @FormParam("value") value: Int): Response {
 
-        if(amount <= 0)
+        if(value <= 0)
             return Response.status(Response.Status.BAD_REQUEST).entity("Amount should be greater than 0\n").build()
-
-        val vaultStates = rpcOps.vaultQueryBy<WalletState>()
-        val balance = vaultStates.states.last().state.data
-        var user = balance.user
-        var seller = balance.seller
-        var bank = balance.bank
-
-        when (to) {
-            "user" -> user += amount
-            "seller" -> seller += amount
-            "bank" -> bank += amount
-            else -> return Response.status(Response.Status.BAD_REQUEST).entity("Not a valid user\n").build()
-        }
 
         var status: Response.Status
         var msg: String
         try {
-            val flowHandle = rpcOps.startTrackedFlow(::InitiatorWallet, user, seller, bank)
+            val flowHandle = rpcOps.startTrackedFlow(::InitiatorWallet, entityMetadata, entityId, value)
             flowHandle.progress.subscribe { println(">> $it") }
             val result = flowHandle.returnValue.getOrThrow()
             status = Response.Status.CREATED
@@ -369,4 +386,29 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
         }
         return Response.status(status).entity(msg).build()
     }
+
+
+
+
+
+
+    fun json(build: JsonObjectBuilder.() -> Unit): JSONObject {
+        return JsonObjectBuilder().json(build)
+    }
+
+    class JsonObjectBuilder {
+        private val deque: Deque<JSONObject> = ArrayDeque()
+
+        fun json(build: JsonObjectBuilder.() -> Unit): JSONObject {
+            deque.push(JSONObject())
+            this.build()
+            return deque.pop()
+        }
+
+        infix fun <T> String.To(value: T) {
+            deque.peek().put(this, value)
+        }
+    }
+
+
 }
