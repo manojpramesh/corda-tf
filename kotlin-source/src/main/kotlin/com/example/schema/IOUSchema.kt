@@ -23,20 +23,20 @@ object IOUSchemaV1 : MappedSchema(
     @Table(name = "po_states")
     class PersistentIOU(
 
+            @Column(name = "typeOfDocument")
+            var typeOfDocument: String,
+
             @Column(name = "data")
             var data: String,
 
             @Column(name = "status")
             var status: String,
 
-            @Column(name = "id")
-            var id: String,
+            @Column(name = "orderNumber")
+            var orderNumber: String,
 
-            @Column(name = "lender")
-            var lenderName: String,
-
-            @Column(name = "borrower")
-            var borrowerName: String
+            @Column(name = "tradeId")
+            var tradeId: String
 
     ) : PersistentState()
 }

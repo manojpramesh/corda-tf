@@ -31,9 +31,11 @@ import net.corda.core.utilities.ProgressTracker.Step
 object ExampleFlow {
     @InitiatingFlow
     @StartableByRPC
-    class Initiator(val data: String,
+    class Initiator(val typeOfDocument: String,
+                    val data: String,
                     val status: String,
-                    val id: String) : FlowLogic<SignedTransaction>() {
+                    val orderNumber: String,
+                    val tradeId: String) : FlowLogic<SignedTransaction>() {
         /**
          * The progress tracker checkpoints each stage of the flow and outputs the specified messages when each
          * checkpoint is reached in the code. See the 'progressTracker.currentStep' expressions within the call() function.
@@ -75,7 +77,7 @@ object ExampleFlow {
             progressTracker.currentStep = GENERATING_TRANSACTION
             // Generate an unsigned transaction.
             // val iouState = IOUState(iouValue, serviceHub.myInfo.legalIdentities.first(), otherParty, status)
-            val iouState = IOUState(data, status, id, serviceHub.myInfo.legalIdentities.first(), otherParty)
+            val iouState = IOUState(typeOfDocument, data, status, orderNumber, tradeId, serviceHub.myInfo.legalIdentities.first())
             val txCommand = Command(IOUContract.Commands.Create(), iouState.participants.map { it.owningKey })
             val txBuilder = TransactionBuilder(notary).withItems(StateAndContract(iouState, IOU_CONTRACT_ID), txCommand)
 

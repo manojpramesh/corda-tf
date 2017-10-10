@@ -20,11 +20,12 @@ import java.util.*
  * @param lender the party issuing the IOU.
  * @param borrower the party receiving and approving the IOU.
  */
-data class IOUState(val data: String,
+data class IOUState(val typeOfDocument: String,
+                    val data: String,
                     val status: String,
-                    val id: String,
+                    val orderNumber: String,
+                    val tradeId: String,
                     val lender:Party,
-                    val borrower:Party,
                     override val linearId: UniqueIdentifier = UniqueIdentifier()):
         LinearState, QueryableState {
     /** The public keys of the involved parties. */
@@ -33,11 +34,11 @@ data class IOUState(val data: String,
     override fun generateMappedObject(schema: MappedSchema): PersistentState {
         return when (schema) {
             is IOUSchemaV1 -> IOUSchemaV1.PersistentIOU(
+                    this.typeOfDocument,
                     this.data,
                     this.status,
-                    this.id,
-                    this.lender.name.toString(),
-                    this.borrower.name.toString()
+                    this.orderNumber,
+                    this.tradeId
             )
             else -> throw IllegalArgumentException("Unrecognised schema $schema")
         }
