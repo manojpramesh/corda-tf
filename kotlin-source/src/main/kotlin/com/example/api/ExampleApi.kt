@@ -6,6 +6,7 @@ import com.example.state.IOUState
 import com.example.state.WalletState
 import net.corda.core.contracts.LinearState
 import net.corda.core.contracts.StateAndRef
+import net.corda.core.contracts.StateRef
 import net.corda.core.contracts.UniqueIdentifier
 import net.corda.core.identity.CordaX500Name
 import net.corda.core.messaging.CordaRPCOps
@@ -14,8 +15,10 @@ import net.corda.core.messaging.vaultQueryBy
 import net.corda.core.node.services.vault.QueryCriteria
 import net.corda.core.utilities.getOrThrow
 import net.corda.core.utilities.loggerFor
+import org.json.simple.JSONObject
 import org.slf4j.Logger
 import java.util.*
+import javax.json.Json
 import javax.ws.rs.*
 import javax.ws.rs.core.MediaType
 import javax.ws.rs.core.Response
@@ -58,62 +61,48 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
      * Displays all PO states that exist in the node's vault.
      */
     @GET
-    @Path("pos")
+    @Path("orders")
     @Produces(MediaType.APPLICATION_JSON)
-    fun getPOs(): List<StateAndRef<IOUState>> {
+    fun getPOs(): List<JSONObject> {
         val vaultStates = rpcOps.vaultQueryBy<IOUState>()
-        return vaultStates.states
-    }
+        val states =  vaultStates.states
+        var result: MutableList<JSONObject> = mutableListOf()
 
-
-    /**
-     * Displays PO details based on the id - DO NOT USE
-     * TODO : Build a custom state query
-     */
-    @GET
-    @Path("pobyid")
-    @Produces(MediaType.APPLICATION_JSON)
-    fun POById(@QueryParam("id") id: Int): List<StateAndRef<IOUState>> {
-
-        //val linearStateCriteria = QueryCriteria.LinearStateQueryCriteria(linearId = listOf(id))
-        //val results = vaultService.queryBy<LinearState>(linearStateCriteria)
-
-        val vaultStates = rpcOps.vaultQueryBy<IOUState>()
-        return vaultStates.states
-    }
-
-    /**
-     * Displays PO details based on the id - DO NOT USE
-     * TODO : Build a custom state query
-     */
-    @GET
-    @Path("pobystatus")
-    @Produces(MediaType.APPLICATION_JSON)
-    fun POByStatus(@QueryParam("status") status: String): List<StateAndRef<IOUState>> {
-        val vaultStates = rpcOps.vaultQueryBy<IOUState>()
-        return vaultStates.states.filter { it.state.data.status == status }
+        states.mapTo(result) {
+            json{
+                "typeOfDocument" To it.state.data.typeOfDocument
+                "data" To it.state.data.data
+                "tradeId" To it.state.data.tradeId
+                "orderNumber" To it.state.data.orderNumber
+                "status" To it.state.data.status
+            }
+        }
+        return result
     }
 
 
     /**
      * Changes PO Status to Created
      */
-    @PUT
-    @Path("create-po")
-    fun createPO(@FormParam("data") data: String): Any {
+    @POST
+    @Path("createOrder")
+    @Consumes(MediaType.APPLICATION_JSON)
+    fun createPO(data: Order): Any {
         var status: Response.Status
         var msg: String
+
         var stat = "Created"
-        var id = UniqueIdentifier().id.toString()
+        var tradeId = UniqueIdentifier().id.toString()
+        var orderNumber = UniqueIdentifier().id.toString()
 
         try {
-            val flowHandle = rpcOps.startTrackedFlow(::Initiator, data, stat, id)
+            val flowHandle = rpcOps.startTrackedFlow(::Initiator, data.typeOfDocument, data.data, stat, orderNumber, tradeId)
             flowHandle.progress.subscribe { println(">> $it") }
             val result = flowHandle
                     .returnValue
                     .getOrThrow()
             status = Response.Status.CREATED
-            msg = "{ 'txHash': ${result.id}, 'id': $id }"
+            msg = "{ 'txHash': ${result.id}, 'tradeId': $tradeId }"
             //val vaultStates = rpcOps.vaultQueryBy<IOUState>()
             //return vaultStates.states.last()
 
@@ -132,16 +121,17 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
     /**
      * Changes PO Status to Approved and don't need finance
      */
-    @PUT
-    @Path("approve-po")
-    fun ApprovePO(@FormParam("data") data: String,
-                  @FormParam("id") id: String): Response {
+    @POST
+    @Path("approve")
+    @Consumes(MediaType.APPLICATION_JSON)
+    fun ApprovePO(data: Order): Response {
         var status: Response.Status
         var msg: String
         var stat = "Approved"
+        var orderNumber = UniqueIdentifier().id.toString()
 
         try {
-            val flowHandle = rpcOps.startTrackedFlow(::Initiator, data, stat, id)
+            val flowHandle = rpcOps.startTrackedFlow(::Initiator, data.typeOfDocument, data.data, stat, orderNumber, data.tradeId)
             flowHandle.progress.subscribe { println(">> $it") }
             val result = flowHandle.returnValue.getOrThrow()
             status = Response.Status.CREATED
@@ -157,16 +147,17 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
     /**
      * Changes PO Status to Approved and don't need finance
      */
-    @PUT
+    @POST
     @Path("request-finance")
-    fun NeedFinance(@FormParam("data") data: String,
-                  @FormParam("id") id: String): Response {
+    @Consumes(MediaType.APPLICATION_JSON)
+    fun NeedFinance(data: Order): Response {
         var status: Response.Status
         var msg: String
         var stat = "FinanceRequested"
+        var orderNumber = UniqueIdentifier().id.toString()
 
         try {
-            val flowHandle = rpcOps.startTrackedFlow(::Initiator, data, stat, id)
+            val flowHandle = rpcOps.startTrackedFlow(::Initiator, data.typeOfDocument, data.data, stat, orderNumber, data.tradeId)
             flowHandle.progress.subscribe { println(">> $it") }
             val result = flowHandle.returnValue.getOrThrow()
             status = Response.Status.CREATED
@@ -182,15 +173,17 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
     /**
      * Changes PO Status to Rejected
      */
-    @PUT
-    @Path("reject-po")
-    fun RejectPO(@FormParam("data") data: String,
-                  @FormParam("id") id: String): Response {
+    @POST
+    @Path("reject")
+    @Consumes(MediaType.APPLICATION_JSON)
+    fun RejectPO(data: Order): Response {
         var status: Response.Status
         var msg: String
         var stat = "Rejected"
+        var orderNumber = UniqueIdentifier().id.toString()
+
         try {
-            val flowHandle = rpcOps.startTrackedFlow(::Initiator, data, stat, id)
+            val flowHandle = rpcOps.startTrackedFlow(::Initiator, data.typeOfDocument, data.data, stat, orderNumber, data.tradeId)
             flowHandle.progress.subscribe { println(">> $it") }
             val result = flowHandle.returnValue.getOrThrow()
             status = Response.Status.CREATED
@@ -206,15 +199,17 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
     /**
      * Changes PO Status to FinanceApproved
      */
-    @PUT
+    @POST
     @Path("approve-finance")
-    fun ApproveFinancing(@FormParam("data") data: String,
-                 @FormParam("id") id: String): Response {
+    @Consumes(MediaType.APPLICATION_JSON)
+    fun ApproveFinancing(data: Order): Response {
         var status: Response.Status
         var msg: String
         var stat = "FinanceApproved"
+        var orderNumber = UniqueIdentifier().id.toString()
+
         try {
-            val flowHandle = rpcOps.startTrackedFlow(::Initiator, data, stat, id)
+            val flowHandle = rpcOps.startTrackedFlow(::Initiator, data.typeOfDocument, data.data, stat, orderNumber, data.tradeId)
             flowHandle.progress.subscribe { println(">> $it") }
             val result = flowHandle.returnValue.getOrThrow()
             status = Response.Status.CREATED
@@ -230,15 +225,17 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
     /**
      * Changes PO Status to FinanceRejected
      */
-    @PUT
+    @POST
     @Path("reject-finance")
-    fun RejectFinancing(@FormParam("data") data: String,
-                 @FormParam("id") id: String): Response {
+    @Consumes(MediaType.APPLICATION_JSON)
+    fun RejectFinancing(data: Order): Response {
         var status: Response.Status
         var msg: String
-        var stat = "FinanceRejected"
+        val stat = "FinanceRejected"
+        var orderNumber = UniqueIdentifier().id.toString()
+
         try {
-            val flowHandle = rpcOps.startTrackedFlow(::Initiator, data, stat, id)
+            val flowHandle = rpcOps.startTrackedFlow(::Initiator, data.typeOfDocument, data.data, stat, orderNumber, data.tradeId)
             flowHandle.progress.subscribe { println(">> $it") }
             val result = flowHandle.returnValue.getOrThrow()
             status = Response.Status.CREATED
@@ -254,7 +251,6 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
 
 
 
-    
     /**
      * Get Current balance
      */
@@ -309,11 +305,10 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
     /**
      * Transfer amount from one account to another
      */
-    @PUT
+    @POST
     @Path("transfer")
-    fun Transfer(@FormParam("from") from: Int,
-                 @FormParam("to") to: Int,
-                 @FormParam("value") value : Int): Response {
+    @Consumes(MediaType.APPLICATION_JSON)
+    fun Transfer(data: WalletTransfer): Response {
 
         val vaultStates = rpcOps.vaultQueryBy<WalletState>()
         val wallet = vaultStates.states
@@ -321,9 +316,9 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
         var toWallet: StateAndRef<WalletState>? = null
 
         for (n in wallet.count() downTo 1) {
-            if(wallet[n - 1].state.data.entityId == from)
+            if(wallet[n - 1].state.data.entityId == data.from)
                 fromWallet = wallet[n - 1]
-            if(wallet[n - 1].state.data.entityId == to)
+            if(wallet[n - 1].state.data.entityId == data.to)
                 toWallet = wallet[n - 1]
             if(fromWallet != null && toWallet != null)
                 break
@@ -338,14 +333,14 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
         try {
 
             val fromWalletMeta = fromWallet?.state?.data?.entityMetadata ?: ""
-            val fromWalletAmount = (fromWallet?.state?.data?.value ?: 0) - value
-            val flowHandleFrom = rpcOps.startTrackedFlow(::InitiatorWallet, fromWalletMeta, from, fromWalletAmount)
+            val fromWalletAmount = (fromWallet?.state?.data?.value ?: 0) - data.value
+            val flowHandleFrom = rpcOps.startTrackedFlow(::InitiatorWallet, fromWalletMeta, data.from, fromWalletAmount)
             flowHandleFrom.progress.subscribe { println(">> $it") }
             flowHandleFrom.returnValue.getOrThrow()
 
             val toWalletMeta = toWallet?.state?.data?.entityMetadata ?: ""
-            val toWalletAmount = (toWallet?.state?.data?.value ?: 0) + value
-            val flowHandleTo = rpcOps.startTrackedFlow(::InitiatorWallet, toWalletMeta, to, toWalletAmount)
+            val toWalletAmount = (toWallet?.state?.data?.value ?: 0) + data.value
+            val flowHandleTo = rpcOps.startTrackedFlow(::InitiatorWallet, toWalletMeta, data.to, toWalletAmount)
             flowHandleTo.progress.subscribe { println(">> $it") }
             val resultTo = flowHandleTo.returnValue.getOrThrow()
 
@@ -362,19 +357,18 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
     /**
      * Load Balance to the given account
      */
-    @PUT
+    @POST
     @Path("onboardWallet")
-    fun onboardWallet(@FormParam("entityMetadata") entityMetadata: String,
-                      @FormParam("entityId") entityId: Int,
-                      @FormParam("value") value: Int): Response {
+    @Consumes(MediaType.APPLICATION_JSON)
+    fun onboardWallet(data: WalletOnboarding): Response {
 
-        if(value <= 0)
+        if(data.value <= 0)
             return Response.status(Response.Status.BAD_REQUEST).entity("Amount should be greater than 0\n").build()
 
         var status: Response.Status
         var msg: String
         try {
-            val flowHandle = rpcOps.startTrackedFlow(::InitiatorWallet, entityMetadata, entityId, value)
+            val flowHandle = rpcOps.startTrackedFlow(::InitiatorWallet, data.entityMetadata, data.entityId, data.value)
             flowHandle.progress.subscribe { println(">> $it") }
             val result = flowHandle.returnValue.getOrThrow()
             status = Response.Status.CREATED
@@ -410,5 +404,25 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
         }
     }
 
+
+
+}
+
+class WalletOnboarding {
+    val entityMetadata: String = ""
+    val entityId: Int = 0
+    val value: Int = 0
+}
+
+class WalletTransfer {
+    val from: Int = 0
+    val to: Int = 0
+    val value: Int = 0
+}
+
+class Order {
+    val typeOfDocument: String = ""
+    val data: String = ""
+    val tradeId: String = ""
 
 }
