@@ -57,19 +57,18 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
                 .filter { it != myLegalName && it.organisation != NOTARY_NAME && it.organisation != NETWORK_MAP_NAME })
     }
 
+
     /**
-     * Displays all PO states that exist in the node's vault.
+     * Get all order logs
      */
     @GET
-    @Path("orders")
+    @Path("orderlogs")
     @Produces(MediaType.APPLICATION_JSON)
-    fun getPOs(): List<JSONObject> {
-        val vaultStates = rpcOps.vaultQueryBy<IOUState>()
-        val states =  vaultStates.states
+    fun orderlogs(): Any {
+        val states = rpcOps.vaultQueryBy<IOUState>().states
         var result: MutableList<JSONObject> = mutableListOf()
-
         states.mapTo(result) {
-            json{
+            json {
                 "typeOfDocument" To it.state.data.typeOfDocument
                 "data" To it.state.data.data
                 "tradeId" To it.state.data.tradeId
@@ -80,173 +79,265 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
         return result
     }
 
-
     /**
-     * Changes PO Status to Created
+     * Filter orders based on trade id
      */
-    @POST
-    @Path("createOrder")
-    @Consumes(MediaType.APPLICATION_JSON)
-    fun createPO(data: Order): Any {
-        var status: Response.Status
-        var msg: String
+    @GET
+    @Path("orders")
+    @Produces(MediaType.APPLICATION_JSON)
+    fun getPOs(@QueryParam("tradeId") tradeId: String): List<JSONObject> {
+        val vaultStates = rpcOps.vaultQueryBy<IOUState>()
+        val states =  vaultStates.states
+        var result: MutableList<JSONObject> = mutableListOf()
 
-        var stat = "Created"
-        var tradeId = UniqueIdentifier().id.toString()
-        var orderNumber = UniqueIdentifier().id.toString()
-
-        try {
-            val flowHandle = rpcOps.startTrackedFlow(::Initiator, data.typeOfDocument, data.data, stat, orderNumber, tradeId)
-            flowHandle.progress.subscribe { println(">> $it") }
-            val result = flowHandle
-                    .returnValue
-                    .getOrThrow()
-            status = Response.Status.CREATED
-            msg = "{ 'txHash': ${result.id}, 'tradeId': $tradeId }"
-            //val vaultStates = rpcOps.vaultQueryBy<IOUState>()
-            //return vaultStates.states.last()
-
-        } catch (ex: Throwable) {
-            status = Response.Status.BAD_REQUEST
-            msg = ex.message!!
-            logger.error(msg, ex)
+        for ((state) in states){
+            if(state.data.tradeId == tradeId){
+                result.add(json {
+                    "typeOfDocument" To state.data.typeOfDocument
+                    "data" To state.data.data
+                    "tradeId" To state.data.tradeId
+                    "orderId" To state.data.orderNumber
+                    "status" To state.data.status
+                })
+            }
         }
-
-        return Response.status(status).entity(msg).build()
+        return result
     }
 
 
-    // TODO : Convert individual status change req to path based switch
 
     /**
-     * Changes PO Status to Approved and don't need finance
+     * Create Document
      */
     @POST
-    @Path("approve")
+    @Path("create/{type}")
     @Consumes(MediaType.APPLICATION_JSON)
-    fun ApprovePO(data: Order): Response {
-        var status: Response.Status
-        var msg: String
-        var stat = "Approved"
-        var orderNumber = UniqueIdentifier().id.toString()
+    @Produces(MediaType.APPLICATION_JSON)
+    fun createOrder(data: Order, @PathParam("type") type: String): Any {
 
-        try {
-            val flowHandle = rpcOps.startTrackedFlow(::Initiator, data.typeOfDocument, data.data, stat, orderNumber, data.tradeId)
-            flowHandle.progress.subscribe { println(">> $it") }
-            val result = flowHandle.returnValue.getOrThrow()
-            status = Response.Status.CREATED
-            msg = "{'txHash': ${result.id} }"
-        } catch (ex: Throwable) {
-            status = Response.Status.BAD_REQUEST
-            msg = ex.message!!
-            logger.error(msg, ex)
+        val stat = "Created"
+        var tradeId = data.tradeId
+        val orderNumber = UniqueIdentifier().id.toString()
+        var typeOfDocument: String
+
+        when(type.toLowerCase()){
+            "purchaseorder" -> {
+                tradeId =  UniqueIdentifier().id.toString()
+                typeOfDocument = "Purchase Order"
+            }
+            "salesorder" -> typeOfDocument = "Sales Order"
+            "billoflading" -> typeOfDocument = "Bill of Lading"
+            "shipmentorder" -> typeOfDocument = "Shipment Order"
+            "financeorder" -> typeOfDocument = "Finance Order"
+            "customsclearanceorder" -> typeOfDocument = "Customs Clearance Order"
+            else -> return Response.status(Response.Status.NOT_FOUND).build()
         }
-        return Response.status(status).entity(msg).build()
-    }
-
-    /**
-     * Changes PO Status to Approved and don't need finance
-     */
-    @POST
-    @Path("request-finance")
-    @Consumes(MediaType.APPLICATION_JSON)
-    fun NeedFinance(data: Order): Response {
-        var status: Response.Status
-        var msg: String
-        var stat = "FinanceRequested"
-        var orderNumber = UniqueIdentifier().id.toString()
 
         try {
-            val flowHandle = rpcOps.startTrackedFlow(::Initiator, data.typeOfDocument, data.data, stat, orderNumber, data.tradeId)
+            val flowHandle = rpcOps.startTrackedFlow(::Initiator, typeOfDocument, data.data, stat, orderNumber, tradeId)
             flowHandle.progress.subscribe { println(">> $it") }
             val result = flowHandle.returnValue.getOrThrow()
-            status = Response.Status.CREATED
-            msg = "{'txHash': ${result.id} }"
+            val msg = json {
+                "txHash" To result.id
+                "tradeId" To tradeId
+                "orderId" To orderNumber
+            }
+            return Response.ok(msg, MediaType.APPLICATION_JSON).build()
         } catch (ex: Throwable) {
-            status = Response.Status.BAD_REQUEST
-            msg = ex.message!!
+            val msg = ex.message!!
             logger.error(msg, ex)
+            return Response.status(Response.Status.BAD_REQUEST).entity(msg).build()
         }
-        return Response.status(status).entity(msg).build()
+    }
+
+
+    /**
+     * Changes order Status to Approved
+     */
+    @POST
+    @Path("approve/{type}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    fun Approve(data: Order, @PathParam("type") type: String): Response {
+        val stat = "Approved"
+        var tradeId = data.tradeId
+        val orderNumber = UniqueIdentifier().id.toString()
+
+        var typeOfDocument: String = when(type.toLowerCase()){
+            "purchaseorder" -> "Purchase Order"
+            "salesorder" -> "Sales Order"
+            "billoflading" -> "Bill of Lading"
+            "shipmentorder" -> "Shipment Order"
+            "financeorder" -> "Finance Order"
+            "customsclearanceorder" -> "Customs Clearance Order"
+            else -> return Response.status(Response.Status.BAD_REQUEST).entity("Not a valid document").build()
+        }
+
+        try {
+            val flowHandle = rpcOps.startTrackedFlow(::Initiator, typeOfDocument, data.data, stat, orderNumber, tradeId)
+            flowHandle.progress.subscribe { println(">> $it") }
+            val result = flowHandle.returnValue.getOrThrow()
+            val msg = json {
+                "txHash" To result.id
+                "tradeId" To tradeId
+                "orderId" To orderNumber
+            }
+            return Response.ok(msg, MediaType.APPLICATION_JSON).build()
+        } catch (ex: Throwable) {
+            val msg = ex.message!!
+            logger.error(msg, ex)
+            return Response.status(Response.Status.BAD_REQUEST).entity(msg).build()
+        }
     }
 
     /**
-     * Changes PO Status to Rejected
+     * Changes Order Status to Rejected
      */
     @POST
-    @Path("reject")
+    @Path("reject/{type}")
     @Consumes(MediaType.APPLICATION_JSON)
-    fun RejectPO(data: Order): Response {
-        var status: Response.Status
-        var msg: String
-        var stat = "Rejected"
-        var orderNumber = UniqueIdentifier().id.toString()
+    @Produces(MediaType.APPLICATION_JSON)
+    fun Reject(data: Order, @PathParam("type") type: String): Response {
+        val stat = "Rejected"
+        var tradeId = data.tradeId
+        val orderNumber = UniqueIdentifier().id.toString()
+
+        var typeOfDocument: String = when(type.toLowerCase()){
+            "purchaseorder" -> "Purchase Order"
+            "salesorder" -> "Sales Order"
+            "billoflading" -> "Bill of Lading"
+            "shipmentorder" -> "Shipment Order"
+            "financeorder" -> "Finance Order"
+            "customsclearanceorder" -> "Customs Clearance Order"
+            else -> return Response.status(Response.Status.BAD_REQUEST).entity("Not a valid document").build()
+        }
 
         try {
-            val flowHandle = rpcOps.startTrackedFlow(::Initiator, data.typeOfDocument, data.data, stat, orderNumber, data.tradeId)
+            val flowHandle = rpcOps.startTrackedFlow(::Initiator, typeOfDocument, data.data, stat, orderNumber, tradeId)
             flowHandle.progress.subscribe { println(">> $it") }
             val result = flowHandle.returnValue.getOrThrow()
-            status = Response.Status.CREATED
-            msg = "{'txHash': ${result.id} }"
+            val msg = json {
+                "txHash" To result.id
+                "tradeId" To tradeId
+                "orderId" To orderNumber
+            }
+            return Response.ok(msg, MediaType.APPLICATION_JSON).build()
         } catch (ex: Throwable) {
-            status = Response.Status.BAD_REQUEST
-            msg = ex.message!!
+            val msg = ex.message!!
             logger.error(msg, ex)
+            return Response.status(Response.Status.BAD_REQUEST).entity(msg).build()
         }
-        return Response.status(status).entity(msg).build()
     }
 
     /**
-     * Changes PO Status to FinanceApproved
+     * Changes order Status to Finance Requested
      */
     @POST
-    @Path("approve-finance")
+    @Path("requestFinance/{type}")
     @Consumes(MediaType.APPLICATION_JSON)
-    fun ApproveFinancing(data: Order): Response {
-        var status: Response.Status
-        var msg: String
-        var stat = "FinanceApproved"
-        var orderNumber = UniqueIdentifier().id.toString()
+    @Produces(MediaType.APPLICATION_JSON)
+    fun NeedFinance(data: Order, @PathParam("type") type: String): Response {
+        val stat = "Finance Requested"
+        var tradeId = data.tradeId
+        val orderNumber = UniqueIdentifier().id.toString()
+
+        var typeOfDocument: String = when(type.toLowerCase()){
+            "purchaseorder" -> "Purchase Order"
+            "salesorder" -> "Sales Order"
+            else -> return Response.status(Response.Status.NOT_FOUND).build()
+        }
 
         try {
-            val flowHandle = rpcOps.startTrackedFlow(::Initiator, data.typeOfDocument, data.data, stat, orderNumber, data.tradeId)
+            val flowHandle = rpcOps.startTrackedFlow(::Initiator, typeOfDocument, data.data, stat, orderNumber, tradeId)
             flowHandle.progress.subscribe { println(">> $it") }
             val result = flowHandle.returnValue.getOrThrow()
-            status = Response.Status.CREATED
-            msg = "{'txHash': ${result.id} }"
+            val msg = json {
+                "txHash" To result.id
+                "tradeId" To tradeId
+                "orderId" To orderNumber
+            }
+            return Response.ok(msg, MediaType.APPLICATION_JSON).build()
         } catch (ex: Throwable) {
-            status = Response.Status.BAD_REQUEST
-            msg = ex.message!!
+            val msg = ex.message!!
             logger.error(msg, ex)
+            return Response.status(Response.Status.BAD_REQUEST).entity(msg).build()
         }
-        return Response.status(status).entity(msg).build()
     }
 
     /**
-     * Changes PO Status to FinanceRejected
+     * Changes order Status to FinanceApproved
      */
     @POST
-    @Path("reject-finance")
+    @Path("approveFinance/{type}")
     @Consumes(MediaType.APPLICATION_JSON)
-    fun RejectFinancing(data: Order): Response {
-        var status: Response.Status
-        var msg: String
-        val stat = "FinanceRejected"
-        var orderNumber = UniqueIdentifier().id.toString()
+    @Produces(MediaType.APPLICATION_JSON)
+    fun ApproveFinancing(data: Order, @PathParam("type") type: String): Response {
+        val stat = "Finance Approved"
+        var tradeId = data.tradeId
+        val orderNumber = UniqueIdentifier().id.toString()
+
+        var typeOfDocument: String = when(type.toLowerCase()){
+            "purchaseorder" -> "Purchase Order"
+            "salesorder" -> "Sales Order"
+            else -> return Response.status(Response.Status.NOT_FOUND).build()
+        }
 
         try {
-            val flowHandle = rpcOps.startTrackedFlow(::Initiator, data.typeOfDocument, data.data, stat, orderNumber, data.tradeId)
+            val flowHandle = rpcOps.startTrackedFlow(::Initiator, typeOfDocument, data.data, stat, orderNumber, tradeId)
             flowHandle.progress.subscribe { println(">> $it") }
             val result = flowHandle.returnValue.getOrThrow()
-            status = Response.Status.CREATED
-            msg = "{'txHash': ${result.id} }"
+            val msg = json {
+                "txHash" To result.id
+                "tradeId" To tradeId
+                "orderId" To orderNumber
+            }
+            return Response.ok(msg, MediaType.APPLICATION_JSON).build()
         } catch (ex: Throwable) {
-            status = Response.Status.BAD_REQUEST
-            msg = ex.message!!
+            val msg = ex.message!!
             logger.error(msg, ex)
+            return Response.status(Response.Status.BAD_REQUEST).entity(msg).build()
         }
-        return Response.status(status).entity(msg).build()
     }
+
+    /**
+     * Changes order Status to FinanceRejected
+     */
+    @POST
+    @Path("rejectFinance/{type}")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    fun RejectFinancing(data: Order, @PathParam("type") type: String): Response {
+        val stat = "Finance Rejected"
+        var tradeId = data.tradeId
+        val orderNumber = UniqueIdentifier().id.toString()
+
+        var typeOfDocument: String = when(type.toLowerCase()){
+            "purchaseorder" -> "Purchase Order"
+            "salesorder" -> "Sales Order"
+            else -> return Response.status(Response.Status.NOT_FOUND).build()
+        }
+
+        try {
+            val flowHandle = rpcOps.startTrackedFlow(::Initiator, typeOfDocument, data.data, stat, orderNumber, tradeId)
+            flowHandle.progress.subscribe { println(">> $it") }
+            val result = flowHandle.returnValue.getOrThrow()
+            val msg = json {
+                "txHash" To result.id
+                "tradeId" To tradeId
+                "orderId" To orderNumber
+            }
+            return Response.ok(msg, MediaType.APPLICATION_JSON).build()
+        } catch (ex: Throwable) {
+            val msg = ex.message!!
+            logger.error(msg, ex)
+            return Response.status(Response.Status.BAD_REQUEST).entity(msg).build()
+        }
+    }
+
+
+
+
+
 
 
 
@@ -308,6 +399,7 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
     @POST
     @Path("transfer")
     @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
     fun Transfer(data: WalletTransfer): Response {
 
         val vaultStates = rpcOps.vaultQueryBy<WalletState>()
@@ -329,7 +421,6 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
 
 
         var status: Response.Status
-        var msg: String
         try {
 
             val fromWalletMeta = fromWallet?.state?.data?.entityMetadata ?: ""
@@ -345,13 +436,17 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
             val resultTo = flowHandleTo.returnValue.getOrThrow()
 
             status = Response.Status.CREATED
-            msg = "{'txHash': ${resultTo.id} }"
+            val msg = json {
+                "txHash" To resultTo.id
+            }
+            return Response.status(status).entity(msg).build()
         } catch (ex: Throwable) {
             status = Response.Status.BAD_REQUEST
-            msg = ex.message!!
+            val msg = ex.message!!
             logger.error(msg, ex)
+            return Response.status(status).entity(msg).build()
         }
-        return Response.status(status).entity(msg).build()
+
     }
 
     /**
@@ -360,25 +455,28 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
     @POST
     @Path("onboardWallet")
     @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
     fun onboardWallet(data: WalletOnboarding): Response {
 
         if(data.value <= 0)
             return Response.status(Response.Status.BAD_REQUEST).entity("Amount should be greater than 0\n").build()
 
         var status: Response.Status
-        var msg: String
         try {
             val flowHandle = rpcOps.startTrackedFlow(::InitiatorWallet, data.entityMetadata, data.entityId, data.value)
             flowHandle.progress.subscribe { println(">> $it") }
             val result = flowHandle.returnValue.getOrThrow()
             status = Response.Status.CREATED
-            msg = "{'txHash': ${result.id} }"
+            val msg = json {
+                "txHash" To result.id
+            }
+            return Response.status(status).entity(msg).build()
         } catch (ex: Throwable) {
             status = Response.Status.BAD_REQUEST
-            msg = ex.message!!
+            val msg = ex.message!!
             logger.error(msg, ex)
+            return Response.status(status).entity(msg).build()
         }
-        return Response.status(status).entity(msg).build()
     }
 
 
@@ -403,8 +501,6 @@ class ExampleApi(val rpcOps: CordaRPCOps) {
             deque.peek().put(this, value)
         }
     }
-
-
 
 }
 
